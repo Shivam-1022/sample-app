@@ -30,6 +30,10 @@ jobs:
     # 5. SonarQube Analysis
     - name: SonarQube Scan
       run: |
+        docker run \
+        --rm \
+        -v "$PWD:/usr/src" \
+        sonarsource/sonar-scanner-cli \
         sonar-scanner \
         -Dsonar.projectKey=devops-app \
         -Dsonar.sources=. \
