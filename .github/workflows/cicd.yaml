@@ -9,44 +9,58 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      IMAGE: shivam1022/my-app:latest
+
     steps:
-    
+
     # 1. Checkout Code
     - name: Checkout repository
       uses: actions/checkout@v4
 
     # 2. Login to Docker Hub
     - name: Login to Docker Hub
-      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+      run: |
+        echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
     # 3. Build Docker Image
     - name: Build Docker Image
-      run: docker build -t shivam1022/my-app:latest .
+      run: docker build -t $IMAGE .
 
     # 4. Push Docker Image
     - name: Push Docker Image
-      run: docker push shivam1022/my-app:latest
+      run: docker push $IMAGE
 
-    # 5. SonarQube Analysis
-    - name: SonarQube Scan
+    # 5. SonarQube Scan
+    - name: SonarQube Analysis
       run: |
-        docker run \
-        --rm \
-        -v "$PWD:/usr/src" \
-        sonarsource/sonar-scanner-cli \
-        sonar-scanner \
-        -Dsonar.projectKey=devops-app \
-        -Dsonar.sources=. \
-        -Dsonar.host.url=http://13.233.140.143:9000 \
-        -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+        docker run --rm \
+          -v "$PWD:/usr/src" \
+          sonarsource/sonar-scanner-cli \
+          -Dsonar.projectKey=devops-app \
+          -Dsonar.sources=/usr/src \
+          -Dsonar.host.url=http://13.233.140.143:9000 \
+          -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
-    # 6. Setup Kubectl
-    - name: Setup kubeconfig
+    # 6. Deploy via Bastion Host (FIXED)
+    - name: Deploy via Bastion Host
       run: |
-        echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
-        export KUBECONFIG=$PWD/kubeconfig
-        kubectl config get-contexts
-        kubectl config view
-        kubectl get nodes
-    
-        kubectl apply -f deployment.yaml
+        echo "${{ secrets.BASTION_SSH_KEY }}" > key.pem
+        chmod 600 key.pem
+
+        # Copy Kubernetes manifest to bastion
+        scp -o StrictHostKeyChecking=no -i key.pem \
+          deployment.yaml \
+          ${{ secrets.BASTION_USER }}@${{ secrets.BASTION_HOST }}:/home/ubuntu/
+
+        # SSH into bastion and deploy
+        ssh -o StrictHostKeyChecking=no -i key.pem \
+        ${{ secrets.BASTION_USER }}@${{ secrets.BASTION_HOST }} << 'EOF'
+
+          export KUBECONFIG=/home/ubuntu/kubeconfig
+
+          kubectl apply -f /home/ubuntu/deployment.yaml
+          kubectl get pods -o wide
+          kubectl rollout status deployment/devops-app
+
+        EOF
