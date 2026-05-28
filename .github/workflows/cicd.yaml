@@ -41,10 +41,11 @@ jobs:
         -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
     # 6. Setup Kubectl
-    - name: Setup Kubeconfig
+    - name: Setup kubeconfig
       run: |
         echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
         export KUBECONFIG=$PWD/kubeconfig
+        kubectl config get-contexts
 
     # 7. Deploy to Kubernetes
     - name: Deploy to Kubernetes
